@@ -1,7 +1,5 @@
 import type { RarityName } from './config.js';
 
-// ─── Enums / Literals ────────────────────────────────────────────────────────────
-
 export type RegionId =
   | 'ashen_village'
   | 'blackwood'
@@ -9,48 +7,14 @@ export type RegionId =
   | 'abyss'
   | 'celestial_realm';
 
-export type EquipmentSlot =
-  | 'weapon'
-  | 'armor'
-  | 'ring'
-  | 'amulet'
-  | 'boots'
-  | 'helmet';
-
-export type ItemType =
-  | 'equipment'
-  | 'consumable'
-  | 'material'
-  | 'key'
-  | 'cosmetic';
-
-export type QuestType =
-  | 'daily'
-  | 'weekly'
-  | 'story'
-  | 'region'
-  | 'combat'
-  | 'dungeon'
-  | 'collection'
-  | 'achievement';
-
-export type QuestStatus = 'active' | 'completed' | 'failed' | 'locked';
-
+export type EquipmentSlot = 'weapon' | 'armor' | 'ring' | 'amulet' | 'boots' | 'helmet';
+export type ItemType = 'equipment' | 'consumable' | 'material' | 'key' | 'cosmetic';
+export type QuestType = 'daily' | 'weekly' | 'story' | 'region' | 'combat' | 'dungeon' | 'collection' | 'achievement';
+export type QuestStatus = 'active' | 'completed' | 'failed' | 'locked' | 'claimed';
 export type TitleId =
-  | 'novice'
-  | 'hunter'
-  | 'dragon_slayer'
-  | 'millionaire'
-  | 'casino_king'
-  | 'dungeon_lord'
-  | 'abyss_walker'
-  | 'godslayer'
-  | 'the_unlucky'
-  | 'the_immortal';
-
+  | 'novice' | 'hunter' | 'dragon_slayer' | 'millionaire' | 'casino_king'
+  | 'dungeon_lord' | 'abyss_walker' | 'godslayer' | 'the_unlucky' | 'the_immortal';
 export type PetRarity = RarityName;
-
-// ─── Items ────────────────────────────────────────────────────────────────────────
 
 export interface ItemStats {
   attack?: number;
@@ -62,32 +26,25 @@ export interface ItemStats {
 }
 
 export interface InventoryItem {
-  /** Unique instance ID (uuid) */
   id: string;
-  /** Template/definition ID */
   templateId: string;
   name: string;
   type: ItemType;
   rarity: RarityName;
-  /** Quantity (1 for unique equipment) */
   quantity: number;
-  /** Rolled ONCE at creation, never re-rolled */
   stats?: ItemStats;
   slot?: EquipmentSlot;
-  /** ISO timestamp when obtained */
   obtainedAt: string;
   description?: string;
   emoji?: string;
-  /** Sell value in coins */
   sellValue: number;
 }
 
 export type Equipment = Record<EquipmentSlot, InventoryItem | null>;
 
-// ─── Pets ────────────────────────────────────────────────────────────────────────
-
 export interface Pet {
   id: string;
+  templateId?: string;
   name: string;
   emoji: string;
   rarity: PetRarity;
@@ -99,8 +56,6 @@ export interface Pet {
   ability?: string;
   ownedAt: string;
 }
-
-// ─── Quests ───────────────────────────────────────────────────────────────────────
 
 export interface QuestObjective {
   id: string;
@@ -130,8 +85,6 @@ export interface Quest {
   expiresAt?: string;
 }
 
-// ─── Statistics ───────────────────────────────────────────────────────────────────
-
 export interface PlayerStatistics {
   monstersKilled: number;
   bossesKilled: number;
@@ -158,31 +111,16 @@ export interface PlayerStatistics {
 
 function defaultStatistics(): PlayerStatistics {
   return {
-    monstersKilled: 0,
-    bossesKilled: 0,
-    worldBossesKilled: 0,
-    deaths: 0,
-    damageDealt: 0,
-    damageReceived: 0,
-    totalCoinsEarned: 0,
-    totalCoinsSpent: 0,
-    casinoGamesPlayed: 0,
-    casinoCoinsWon: 0,
-    casinoCoinsLost: 0,
-    blackjackWins: 0,
-    jackpotsWon: 0,
-    huntCount: 0,
-    dungeonsCompleted: 0,
-    dungeonsAttempted: 0,
-    itemsCollected: 0,
-    legendaryItemsFound: 0,
-    tradesCompleted: 0,
-    seasonHighestLevel: 1,
-    seasonTotalDamage: 0,
+    monstersKilled: 0, bossesKilled: 0, worldBossesKilled: 0,
+    deaths: 0, damageDealt: 0, damageReceived: 0,
+    totalCoinsEarned: 0, totalCoinsSpent: 0,
+    casinoGamesPlayed: 0, casinoCoinsWon: 0, casinoCoinsLost: 0,
+    blackjackWins: 0, jackpotsWon: 0,
+    huntCount: 0, dungeonsCompleted: 0, dungeonsAttempted: 0,
+    itemsCollected: 0, legendaryItemsFound: 0, tradesCompleted: 0,
+    seasonHighestLevel: 1, seasonTotalDamage: 0,
   };
 }
-
-// ─── Player ───────────────────────────────────────────────────────────────────────
 
 export interface CooldownMap {
   hunt?: number;
@@ -192,6 +130,8 @@ export interface CooldownMap {
   dungeon?: number;
   casino?: number;
   trade?: number;
+  questDailyRefresh?: number;
+  questWeeklyRefresh?: number;
 }
 
 export interface Player {
@@ -230,35 +170,20 @@ export interface Player {
   };
 }
 
-// ─── Default player factory ───────────────────────────────────────────────────────
-
 export function createDefaultPlayer(userId: string, username: string): Player {
   const now = new Date().toISOString();
   return {
-    userId,
-    username,
-    characterName: username,
-    createdAt: now,
-    updatedAt: now,
-    level: 1,
-    xp: 0,
-    gold: 100,
-    hp: 100,
-    maxHp: 100,
-    attack: 10,
-    defense: 5,
-    luck: 1,
+    userId, username, characterName: username,
+    createdAt: now, updatedAt: now,
+    level: 1, xp: 0, gold: 100,
+    hp: 100, maxHp: 100, attack: 10, defense: 5, luck: 1,
     reputation: 0,
-    titles: ['novice'],
-    activeTitle: 'novice',
-    region: 'ashen_village',
-    unlockedRegions: ['ashen_village'],
+    titles: ['novice'], activeTitle: 'novice',
+    region: 'ashen_village', unlockedRegions: ['ashen_village'],
     inventory: [],
     equipment: { weapon: null, armor: null, ring: null, amulet: null, boots: null, helmet: null },
-    pets: [],
-    activePet: null,
-    quests: [],
-    achievements: [],
+    pets: [], activePet: null,
+    quests: [], achievements: [],
     statistics: defaultStatistics(),
     cooldowns: {},
     seasonStats: { season: 1, xpEarned: 0, coinsEarned: 0, bossKills: 0 },
@@ -270,21 +195,19 @@ export function migratePlayer(
 ): Player {
   const defaults = createDefaultPlayer(stored.userId, stored.username);
   const merged: Player = { ...defaults, ...stored } as Player;
-  merged.equipment = { ...defaults.equipment, ...(stored.equipment ?? {}) } as Equipment;
-  merged.statistics = { ...defaults.statistics, ...(stored.statistics ?? {}) };
-  merged.cooldowns = { ...defaults.cooldowns, ...(stored.cooldowns ?? {}) };
+  merged.equipment   = { ...defaults.equipment,   ...(stored.equipment   ?? {}) } as Equipment;
+  merged.statistics  = { ...defaults.statistics,  ...(stored.statistics  ?? {}) };
+  merged.cooldowns   = { ...defaults.cooldowns,   ...(stored.cooldowns   ?? {}) };
   merged.seasonStats = { ...defaults.seasonStats, ...(stored.seasonStats ?? {}) };
-  if (!Array.isArray(merged.inventory)) merged.inventory = [];
-  if (!Array.isArray(merged.pets)) merged.pets = [];
-  if (!Array.isArray(merged.quests)) merged.quests = [];
-  if (!Array.isArray(merged.achievements)) merged.achievements = [];
-  if (!Array.isArray(merged.titles)) merged.titles = ['novice'];
+  if (!Array.isArray(merged.inventory))       merged.inventory       = [];
+  if (!Array.isArray(merged.pets))            merged.pets            = [];
+  if (!Array.isArray(merged.quests))          merged.quests          = [];
+  if (!Array.isArray(merged.achievements))    merged.achievements    = [];
+  if (!Array.isArray(merged.titles))          merged.titles          = ['novice'];
   if (!Array.isArray(merged.unlockedRegions)) merged.unlockedRegions = ['ashen_village'];
   if (!merged.region) merged.region = 'ashen_village';
   return merged;
 }
-
-// ─── Combat session ───────────────────────────────────────────────────────────────
 
 export interface CombatEnemy {
   id: string;
@@ -317,11 +240,8 @@ export interface CombatSession {
   status: 'active' | 'victory' | 'defeat' | 'fled';
   rewardsClaimed: boolean;
   createdAt: number;
-  /** True when player chose Defend this turn — reduces incoming damage by 50% */
   defending?: boolean;
 }
-
-// ─── Guild ────────────────────────────────────────────────────────────────────────
 
 export interface Guild {
   guildId: string;
@@ -333,8 +253,6 @@ export interface Guild {
   upgrades: Record<string, number>;
   createdAt: string;
 }
-
-// ─── World Boss ───────────────────────────────────────────────────────────────────
 
 export interface WorldBoss {
   id: string;
@@ -350,8 +268,6 @@ export interface WorldBoss {
   rewardsClaimed: boolean;
   mvpUserId?: string;
 }
-
-// ─── Jackpot ──────────────────────────────────────────────────────────────────────
 
 export interface JackpotState {
   pool: number;
