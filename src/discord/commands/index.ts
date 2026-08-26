@@ -14,10 +14,14 @@ export interface AshenCommand {
 
 import { profileCommand } from './profile.js';
 import { statusCommand } from './status.js';
+import { huntCommand } from './hunt.js';
+import { adventureCommand } from './adventure.js';
 
 const COMMANDS: AshenCommand[] = [
   profileCommand,
   statusCommand,
+  huntCommand,
+  adventureCommand,
 ];
 
 export function getCommands(): AshenCommand[] {
