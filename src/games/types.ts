@@ -1,6 +1,6 @@
 import type { RarityName } from './config.js';
 
-// ─── Enums / Literals ──────────────────────────────────────────────────────────
+// ─── Enums / Literals ────────────────────────────────────────────────────────────
 
 export type RegionId =
   | 'ashen_village'
@@ -50,7 +50,7 @@ export type TitleId =
 
 export type PetRarity = RarityName;
 
-// ─── Items ─────────────────────────────────────────────────────────────────────
+// ─── Items ────────────────────────────────────────────────────────────────────────
 
 export interface ItemStats {
   attack?: number;
@@ -71,7 +71,7 @@ export interface InventoryItem {
   rarity: RarityName;
   /** Quantity (1 for unique equipment) */
   quantity: number;
-  /** Defined once at creation, never re-rolled */
+  /** Rolled ONCE at creation, never re-rolled */
   stats?: ItemStats;
   slot?: EquipmentSlot;
   /** ISO timestamp when obtained */
@@ -84,7 +84,7 @@ export interface InventoryItem {
 
 export type Equipment = Record<EquipmentSlot, InventoryItem | null>;
 
-// ─── Pets ──────────────────────────────────────────────────────────────────────
+// ─── Pets ────────────────────────────────────────────────────────────────────────
 
 export interface Pet {
   id: string;
@@ -93,17 +93,14 @@ export interface Pet {
   rarity: PetRarity;
   level: number;
   xp: number;
-  /** Passive coin bonus multiplier (e.g. 0.05 = +5%) */
   coinBonus: number;
-  /** Passive XP bonus multiplier */
   xpBonus: number;
-  /** Combat bonus multiplier */
   combatBonus: number;
   ability?: string;
   ownedAt: string;
 }
 
-// ─── Quests ────────────────────────────────────────────────────────────────────
+// ─── Quests ───────────────────────────────────────────────────────────────────────
 
 export interface QuestObjective {
   id: string;
@@ -133,35 +130,28 @@ export interface Quest {
   expiresAt?: string;
 }
 
-// ─── Statistics ────────────────────────────────────────────────────────────────
+// ─── Statistics ───────────────────────────────────────────────────────────────────
 
 export interface PlayerStatistics {
-  // Combat
   monstersKilled: number;
   bossesKilled: number;
   worldBossesKilled: number;
   deaths: number;
   damageDealt: number;
   damageReceived: number;
-  // Economy
   totalCoinsEarned: number;
   totalCoinsSpent: number;
-  // Casino
   casinoGamesPlayed: number;
   casinoCoinsWon: number;
   casinoCoinsLost: number;
   blackjackWins: number;
   jackpotsWon: number;
-  // Exploration
   huntCount: number;
   dungeonsCompleted: number;
   dungeonsAttempted: number;
-  // Collection
   itemsCollected: number;
   legendaryItemsFound: number;
-  // Social
   tradesCompleted: number;
-  // Season
   seasonHighestLevel: number;
   seasonTotalDamage: number;
 }
@@ -192,7 +182,7 @@ function defaultStatistics(): PlayerStatistics {
   };
 }
 
-// ─── Player ────────────────────────────────────────────────────────────────────
+// ─── Player ───────────────────────────────────────────────────────────────────────
 
 export interface CooldownMap {
   hunt?: number;
@@ -205,55 +195,32 @@ export interface CooldownMap {
 }
 
 export interface Player {
-  // Identity
   userId: string;
   username: string;
   characterName: string;
   createdAt: string;
   updatedAt: string;
-
-  // Progression
   level: number;
   xp: number;
   gold: number;
-
-  // Combat stats
   hp: number;
   maxHp: number;
   attack: number;
   defense: number;
   luck: number;
-
-  // Reputation & titles
   reputation: number;
   titles: TitleId[];
   activeTitle: TitleId | null;
-
-  // World
   region: RegionId;
   unlockedRegions: RegionId[];
-
-  // Inventory
   inventory: InventoryItem[];
   equipment: Equipment;
-
-  // Pets
   pets: Pet[];
   activePet: string | null;
-
-  // Quests
   quests: Quest[];
-
-  // Achievements
   achievements: string[];
-
-  // Statistics
   statistics: PlayerStatistics;
-
-  // Cooldowns (Unix ms timestamps of when cooldown expires)
   cooldowns: CooldownMap;
-
-  // Season stats
   seasonStats: {
     season: number;
     xpEarned: number;
@@ -263,12 +230,9 @@ export interface Player {
   };
 }
 
-// ─── Default player factory ────────────────────────────────────────────────────
+// ─── Default player factory ───────────────────────────────────────────────────────
 
-export function createDefaultPlayer(
-  userId: string,
-  username: string
-): Player {
+export function createDefaultPlayer(userId: string, username: string): Player {
   const now = new Date().toISOString();
   return {
     userId,
@@ -290,45 +254,26 @@ export function createDefaultPlayer(
     region: 'ashen_village',
     unlockedRegions: ['ashen_village'],
     inventory: [],
-    equipment: {
-      weapon: null,
-      armor: null,
-      ring: null,
-      amulet: null,
-      boots: null,
-      helmet: null,
-    },
+    equipment: { weapon: null, armor: null, ring: null, amulet: null, boots: null, helmet: null },
     pets: [],
     activePet: null,
     quests: [],
     achievements: [],
     statistics: defaultStatistics(),
     cooldowns: {},
-    seasonStats: {
-      season: 1,
-      xpEarned: 0,
-      coinsEarned: 0,
-      bossKills: 0,
-    },
+    seasonStats: { season: 1, xpEarned: 0, coinsEarned: 0, bossKills: 0 },
   };
 }
 
-/**
- * Merge a stored (possibly old) player record with defaults
- * so that new fields get their default values automatically.
- * Existing data is NEVER overwritten.
- */
-export function migratePlayer(stored: Partial<Player> & { userId: string; username: string }): Player {
+export function migratePlayer(
+  stored: Partial<Player> & { userId: string; username: string }
+): Player {
   const defaults = createDefaultPlayer(stored.userId, stored.username);
   const merged: Player = { ...defaults, ...stored } as Player;
-
-  // Deep-merge nested objects
   merged.equipment = { ...defaults.equipment, ...(stored.equipment ?? {}) } as Equipment;
   merged.statistics = { ...defaults.statistics, ...(stored.statistics ?? {}) };
   merged.cooldowns = { ...defaults.cooldowns, ...(stored.cooldowns ?? {}) };
   merged.seasonStats = { ...defaults.seasonStats, ...(stored.seasonStats ?? {}) };
-
-  // Ensure required arrays
   if (!Array.isArray(merged.inventory)) merged.inventory = [];
   if (!Array.isArray(merged.pets)) merged.pets = [];
   if (!Array.isArray(merged.quests)) merged.quests = [];
@@ -336,11 +281,10 @@ export function migratePlayer(stored: Partial<Player> & { userId: string; userna
   if (!Array.isArray(merged.titles)) merged.titles = ['novice'];
   if (!Array.isArray(merged.unlockedRegions)) merged.unlockedRegions = ['ashen_village'];
   if (!merged.region) merged.region = 'ashen_village';
-
   return merged;
 }
 
-// ─── Combat session (ephemeral, not persisted long-term) ──────────────────────
+// ─── Combat session ───────────────────────────────────────────────────────────────
 
 export interface CombatEnemy {
   id: string;
@@ -373,9 +317,11 @@ export interface CombatSession {
   status: 'active' | 'victory' | 'defeat' | 'fled';
   rewardsClaimed: boolean;
   createdAt: number;
+  /** True when player chose Defend this turn — reduces incoming damage by 50% */
+  defending?: boolean;
 }
 
-// ─── Guild ─────────────────────────────────────────────────────────────────────
+// ─── Guild ────────────────────────────────────────────────────────────────────────
 
 export interface Guild {
   guildId: string;
@@ -388,7 +334,7 @@ export interface Guild {
   createdAt: string;
 }
 
-// ─── World Boss ────────────────────────────────────────────────────────────────
+// ─── World Boss ───────────────────────────────────────────────────────────────────
 
 export interface WorldBoss {
   id: string;
@@ -397,7 +343,7 @@ export interface WorldBoss {
   region: RegionId;
   maxHp: number;
   currentHp: number;
-  participants: Record<string, number>; // userId -> damage dealt
+  participants: Record<string, number>;
   status: 'active' | 'defeated' | 'expired';
   spawnedAt: string;
   expiresAt: string;
@@ -405,7 +351,7 @@ export interface WorldBoss {
   mvpUserId?: string;
 }
 
-// ─── Jackpot ──────────────────────────────────────────────────────────────────
+// ─── Jackpot ──────────────────────────────────────────────────────────────────────
 
 export interface JackpotState {
   pool: number;
