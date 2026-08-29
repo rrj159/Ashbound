@@ -10,7 +10,9 @@ export async function registerCommands(): Promise<void> {
   }
 
   const commands = getCommands();
-  const bodies = commands.map((c) => c.data.toJSON());
+  const bodies = commands
+    .filter((c) => 'toJSON' in c.data)
+    .map((c) => (c.data as { toJSON(): unknown }).toJSON());
 
   const rest = new REST({ version: '10' }).setToken(token);
 

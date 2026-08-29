@@ -1,66 +1,55 @@
-import {
-  SlashCommandBuilder,
-  EmbedBuilder,
-  type ChatInputCommandInteraction,
-} from 'discord.js';
-import { GAME_CONFIG } from '../../games/config.js';
-import { getAllPlayers } from '../../games/store.js';
-import type { AshenCommand } from './index.js';
+/**
+ * /status — Show bot + AI status.
+ */
 
-export const statusCommand: AshenCommand = {
-  data: new SlashCommandBuilder()
-    .setName('status')
-    .setDescription('Check AshenAI bot and game status'),
+import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import { getAllHealth, getCooldowns, listAvailableProviders } from '../../ai/health.js';
+import { router } from '../../ai/service.js';
+import { getAllPerf } from '../../ai/router.js';
 
-  async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply();
+export const data = new SlashCommandBuilder()
+  .setName('status')
+  .setDescription('Show bot and AI status')
+  .addBooleanOption((opt) => opt.setName('detailed').setDescription('Show detailed provider info (admin only)'));
 
-    const players = await getAllPlayers();
-    const uptime = process.uptime();
-    const uptimeStr = formatUptime(uptime);
+export async function execute(interaction: import('discord.js').ChatInputCommandInteraction): Promise<void> {
+  const detailed = interaction.options.getBoolean('detailed') ?? false;
+  const isAdmin = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ?? false;
+  const showDetailed = detailed && isAdmin;
 
-    const embed = new EmbedBuilder()
-      .setColor(0x16213e)
-      .setTitle('🌑 AshenAI — System Status')
-      .addFields(
-        {
-          name: '🤖 Bot',
-          value: [
-            `**Status:** 🟢 Online`,
-            `**Uptime:** ${uptimeStr}`,
-            `**Memory:** ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
-          ].join('\n'),
-          inline: true,
-        },
-        {
-          name: '🌑 Ashen Realms',
-          value: [
-            `**Season:** ${GAME_CONFIG.season.current} — ${GAME_CONFIG.season.name}`,
-            `**Players:** ${players.length}`,
-            `**Regions:** 5`,
-          ].join('\n'),
-          inline: true,
-        },
-        {
-          name: '⚙️ Config',
-          value: [
-            `**Hunt Cooldown:** ${GAME_CONFIG.cooldowns.hunt / 1000}s`,
-            `**Max Level:** ${GAME_CONFIG.xp.maxLevel}`,
-            `**Max Coins:** ${GAME_CONFIG.economy.maxCoins.toLocaleString()}`,
-          ].join('\n'),
-          inline: true,
-        }
-      )
-      .setFooter({ text: 'AshenAI' })
-      .setTimestamp();
+  const health = getAllHealth();
+  const cooldowns = getCooldowns();
+  const providers = listAvailableProviders();
 
-    await interaction.editReply({ embeds: [embed] });
-  },
-};
+  const statusEmoji: Record<string, string> = {
+    healthy: '🟢', degraded: '🟡', unhealthy: '🔴', unknown: '⚪',
+  };
 
-function formatUptime(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  return `${h}h ${m}m ${s}s`;
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle('🤖 Ashbound — Status')
+    .addFields(
+      { name: 'Bot', value: '🟢 Online', inline: true },
+      { name: 'Uptime', value: `${Math.floor(process.uptime() / 60)}m`, inline: true },
+      { name: 'Latency', value: `${interaction.client.ws.ping}ms`, inline: true },
+      { name: 'AI Providers', value: providers.length > 0 ? providers.join(', ') : '⚠️ None configured', inline: false },
+    )
+    .setTimestamp();
+
+  if (showDetailed) {
+    for (const name of providers) {
+      const h = health[name];
+      if (!h) continue;
+      const inCooldown = cooldowns[name];
+      const value = [
+        `${statusEmoji[h.status]} ${h.status}`,
+        `Success: ${h.totalSuccesses}/${h.totalSuccesses + h.totalFailures}`,
+        `Latency: ${Math.round(h.avgLatencyMs)}ms avg / ${Math.round(h.p95LatencyMs)}ms p95`,
+        inCooldown ? `⏸️ Cooldown: ${Math.round(inCooldown.remainingMs / 1000)}s` : '',
+      ].filter(Boolean).join('\n');
+      embed.addFields({ name: name, value, inline: true });
+    }
+  }
+
+  await interaction.reply({ embeds: [embed], ephemeral: !showDetailed });
 }

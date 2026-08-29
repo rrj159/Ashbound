@@ -14,7 +14,6 @@ import {
   formatItemStats,
   compareItemStats,
   findInventoryItem,
-  getEffectiveStats as _unused,
 } from '../../games/items.js';
 import { getEffectiveStats } from '../../games/combat.js';
 import { GAME_CONFIG } from '../../games/config.js';
