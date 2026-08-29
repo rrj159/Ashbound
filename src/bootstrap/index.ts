@@ -21,7 +21,7 @@ export interface Application {
  * Bootstrap the entire application.
  */
 export async function bootstrap(): Promise<Application> {
-  console.log('[Ashbound] Starting — Season 1: Rise of Ash');
+  console.log('[Ashbound] Starting');
 
   // 1. Load configuration (fails fast on missing required vars)
   const config = initConfig();
@@ -35,6 +35,7 @@ export async function bootstrap(): Promise<Application> {
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.DirectMessages,
       GatewayIntentBits.MessageContent,
     ],
     partials: [Partials.Message, Partials.Channel],

@@ -1,17 +1,11 @@
-/**
- * /reset — Clear AI conversation context and start fresh.
- */
-
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
-
-export const data = new SlashCommandBuilder()
-  .setName('reset')
-  .setDescription('Clear your AI conversation context and start fresh');
-
+import { SlashCommandBuilder } from 'discord.js';
+import { conversationKey, resetConversation } from '../../ai/conversation.js';
+export const data = new SlashCommandBuilder().setName('reset').setDescription('Reset your AI conversation context');
 export async function execute(interaction: import('discord.js').ChatInputCommandInteraction): Promise<void> {
-  const embed = new EmbedBuilder()
-    .setColor(0x9e9e9e)
-    .setTitle('🔄 Reset')
-    .setDescription('Conversation context cleared.\nStart fresh with /chat, /session start, or send a message.');
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+  resetConversation(conversationKey({
+    userId: interaction.user.id,
+    guildId: interaction.guildId,
+    channelId: interaction.channelId,
+  }));
+  await interaction.reply({ content: 'Your conversation context has been reset.', ephemeral: true });
 }

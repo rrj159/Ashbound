@@ -2,7 +2,7 @@ import type { Client } from 'discord.js';
 import { getCommands } from './commands/index.js';
 
 export function setupEventHandlers(client: Client): void {
-  client.once('ready', () => {
+  client.once('clientReady', () => {
     console.log(`[Discord] Logged in as ${client.user?.tag}`);
   });
 
@@ -16,23 +16,6 @@ export function setupEventHandlers(client: Client): void {
           return;
         }
         await cmd.execute(interaction);
-      } else if (interaction.isButton()) {
-        // Route button interactions to the appropriate handler
-        const commands = getCommands();
-        for (const cmd of commands) {
-          if (cmd.handleButton) {
-            const handled = await cmd.handleButton(interaction);
-            if (handled) return;
-          }
-        }
-      } else if (interaction.isStringSelectMenu()) {
-        const commands = getCommands();
-        for (const cmd of commands) {
-          if (cmd.handleSelect) {
-            const handled = await cmd.handleSelect(interaction);
-            if (handled) return;
-          }
-        }
       }
     } catch (err) {
       console.error('[Discord] Interaction error:', err);

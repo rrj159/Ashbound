@@ -13,6 +13,7 @@ jest.mock('../../security/SecretRedactor.js', () => ({
 }));
 
 import { ai } from '../service.js';
+import { _resetRouterState } from '../router.js';
 import { getPrimaryProvider, getFallbackProvider } from '../providers/index.js';
 
 const mockGetPrimary = getPrimaryProvider as jest.MockedFunction<typeof getPrimaryProvider>;
@@ -44,6 +45,7 @@ const userMsg = (content: string) => [{ role: 'user' as const, content }];
 
 beforeEach(() => {
   jest.clearAllMocks();
+  _resetRouterState();
 });
 
 describe('ai.chat()', () => {
@@ -99,7 +101,7 @@ describe('ai.chat()', () => {
     mockGetPrimary.mockReturnValue(null);
     mockGetFallback.mockReturnValue(null);
 
-    await expect(ai.chat(userMsg('Hello'))).rejects.toThrow('No primary provider configured');
+    await expect(ai.chat(userMsg('Hello'))).rejects.toThrow('No providers available');
   });
 
   test('throws primary error when no fallback is configured', async () => {
@@ -232,7 +234,7 @@ describe('ai.stream()', () => {
 
     const chunks: AIStreamChunk[] = [];
     await expect(ai.stream(userMsg('Hello'), (c) => chunks.push(c))).rejects.toThrow(
-      'No primary provider configured',
+      'All streaming providers failed',
     );
   });
 

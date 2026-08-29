@@ -68,9 +68,13 @@ export function loadConfig(): AppConfig {
   const guildId = process.env.DISCORD_GUILD_ID || null;
 
   // AI
-  const primaryProvider = process.env.AI_PROVIDER || 'openai';
-  const fallbackProvider = process.env.AI_FALLBACK && process.env.AI_FALLBACK !== 'none'
-    ? process.env.AI_FALLBACK
+  // Blank values are equivalent to unset. Provider validation remains in the
+  // registry, so invalid values cannot crash startup.
+  const configuredPrimary = process.env.AI_PROVIDER?.trim();
+  const configuredFallback = process.env.AI_FALLBACK?.trim();
+  const primaryProvider = configuredPrimary || 'openai';
+  const fallbackProvider = configuredFallback && configuredFallback.toLowerCase() !== 'none'
+    ? configuredFallback
     : null;
 
   const aiProviders: Record<string, { apiKey?: string; model?: string }> = {};

@@ -13,7 +13,7 @@ jest.mock('../../security/SecretRedactor.js', () => ({
   },
 }));
 
-import { router, getCooldownStatus, getProviderPerf, getAllPerf, _resetRouterState } from '../router.js';
+import { router, getCooldownStatus, getProviderPerf, getAllPerf, getUnavailableProviders, _resetRouterState } from '../router.js';
 import { getPrimaryProvider, getFallbackProvider, listAvailableProviders } from '../providers/index.js';
 
 const mockGetPrimary = getPrimaryProvider as jest.MockedFunction<typeof getPrimaryProvider>;
@@ -88,6 +88,20 @@ describe('AIRouter.chat()', () => {
     expect(result.content).toBe('Fallback response');
     expect(groq.complete).toHaveBeenCalledTimes(1);
     expect(deepseek.complete).toHaveBeenCalledTimes(1);
+  });
+
+  test('falls back after credit_balance_exhausted and does not select that provider again', async () => {
+    const openai = makeFailingProvider('openai', Object.assign(new Error('credit_balance_exhausted'), { status: 429, code: 'credit_balance_exhausted' }));
+    const groq = makeProvider('groq', 'Fallback response');
+    mockGetPrimary.mockReturnValue(asProvider(openai));
+    mockGetFallback.mockReturnValue(asProvider(groq));
+    mockListAvailable.mockReturnValue(['openai', 'groq']);
+
+    await expect(router.chat({ messages: userMsg('Hello') })).resolves.toMatchObject({ content: 'Fallback response' });
+    expect(getUnavailableProviders().openai).toBe('permanent');
+    openai.complete.mockClear();
+    await router.chat({ messages: userMsg('Again') });
+    expect(openai.complete).not.toHaveBeenCalled();
   });
 
   test('throws when all providers fail', async () => {
@@ -286,10 +300,10 @@ describe('AIRouter.stream()', () => {
     const chunks: AIStreamChunk[] = [];
     await expect(
       router.stream({ messages: userMsg('Hello') }, (c) => chunks.push(c)),
-    ).rejects.toThrow('All streaming providers failed');
+    ).rejects.toThrow('deepseek failed');
   });
 
-  test('resets stream on provider failure with done signal', async () => {
+  test('continues stream with fallback after provider failure', async () => {
     const groq = makeFailingProvider('groq');
     const deepseek = makeProvider('deepseek', 'Fallback chunk');
     mockGetPrimary.mockReturnValue(asProvider(groq));
@@ -299,9 +313,8 @@ describe('AIRouter.stream()', () => {
     const chunks: AIStreamChunk[] = [];
     await router.stream({ messages: userMsg('Hello') }, (c) => chunks.push(c));
 
-    expect(chunks[0].content).toBe('');
-    expect(chunks[0].done).toBe(true);
-    expect(chunks[1].content).toBe('Fallback chunk');
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].content).toBe('Fallback chunk');
   });
 });
 

@@ -11,7 +11,7 @@
  * Usage: replace `ai.chat()` with `router.chat()` — same interface.
  */
 
-import { getPrimaryProvider, getFallbackProvider, listAvailableProviders } from './providers/index.js';
+import { getPrimaryProvider, getFallbackProvider, getProvider, listAvailableProviders } from './providers/index.js';
 import type { AICompletionOptions, AIResponse, AIStreamChunk, AIMessage } from './types.js';
 import { SecretRedactor } from '../security/SecretRedactor.js';
 
@@ -22,6 +22,25 @@ interface CooldownEntry {
 }
 
 const _cooldowns = new Map<string, CooldownEntry>();
+/** Providers with rejected credentials or exhausted credit. */
+const _unavailable = new Map<string, string>();
+
+type ProviderFailureKind = 'permanent' | 'rate_limit' | 'transient';
+
+function classifyProviderFailure(error: unknown): ProviderFailureKind {
+  const record = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  const status = typeof record.status === 'number' ? record.status : undefined;
+  const details = [
+    error instanceof Error ? error.message : String(error),
+    typeof record.code === 'string' ? record.code : '',
+    typeof record.type === 'string' ? record.type : '',
+    record.error && typeof record.error === 'object' ? JSON.stringify(record.error) : '',
+  ].join(' ').toLowerCase();
+  if (/(credit_balance_exhausted|insufficient_quota|invalid.?api.?key|invalid.?key|authentication|unauthori[sz]ed|forbidden|billing)/.test(details)
+    || status === 401 || status === 403) return 'permanent';
+  if (status === 429 || /rate.?limit|too many requests/.test(details)) return 'rate_limit';
+  return 'transient';
+}
 
 const COOLDOWN_BASE_MS  = 5_000;  // first failure → 5s wait
 const COOLDOWN_MAX_MS   = 300_000; // 5 minutes max
@@ -70,7 +89,13 @@ export function getCooldownStatus(): Record<string, { until: number; failures: n
 /** Clear all cooldown and performance state (for testing). */
 export function _resetRouterState(): void {
   _cooldowns.clear();
+  _unavailable.clear();
   _perf.clear();
+}
+
+/** Internal diagnostic state for logs/tests; never exposed through commands. */
+export function getUnavailableProviders(): Record<string, string> {
+  return Object.fromEntries(_unavailable);
 }
 
 /** Expire cooldowns older than MAX age (prevents unbounded map growth). */
@@ -106,7 +131,7 @@ function recordPerf(name: string, success: boolean, latencyMs: number): void {
 }
 
 const MAX_COOLDOWN_AGE_MS = 3_600_000; // 1 hour
-setInterval(() => {
+const cooldownCleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [name, entry] of _cooldowns) {
     if (now - (entry.until - cooldownMs(entry.failures)) > MAX_COOLDOWN_AGE_MS) {
@@ -114,6 +139,8 @@ setInterval(() => {
     }
   }
 }, 600_000);
+// This maintenance timer must not keep tests or a graceful shutdown alive.
+cooldownCleanupTimer.unref();
 
 /** What a request needs. */
 export interface RouteContext {
@@ -210,7 +237,7 @@ function scoreProvider(meta: ProviderMeta, intent: string, ctx: RouteContext): n
 function buildCandidates(ctx: RouteContext): ProviderMeta[] {
   const primary = getPrimaryProvider();
   const fallback = getFallbackProvider();
-  const available = listAvailableProviders();
+  const available = typeof listAvailableProviders === 'function' ? listAvailableProviders() : [];
 
   const candidates: ProviderMeta[] = [];
 
@@ -251,7 +278,7 @@ function buildCandidates(ctx: RouteContext): ProviderMeta[] {
   for (const name of available) {
     if (candidates.find((c) => c.name === name)) continue;
     const cat = PROVIDER_CATALOG[name];
-    const prov = name === primary?.name ? primary : name === fallback?.name ? fallback : null;
+    const prov = typeof getProvider === 'function' ? getProvider(name) : null;
     if (cat && prov) candidates.push({ ...cat, provider: prov as ProviderMeta['provider'] });
   }
 
@@ -273,8 +300,7 @@ class AIRouter {
     // Score and sort
     const ranked = candidates
       .map((c) => ({ ...c, score: scoreProvider(c, intent, ctx) }))
-      .filter((c) => c.score >= 0)
-      .sort((a, b) => b.score - a.score);
+      .filter((c) => c.score >= 0);
 
     if (ranked.length === 0) {
       throw new Error('[Router] No providers available that meet requirements.');
@@ -283,6 +309,10 @@ class AIRouter {
     const lastError = { e: null as unknown | null };
 
     for (const candidate of ranked) {
+      if (_unavailable.has(candidate.name)) {
+        console.warn(`[Router] Skipping ${candidate.name} — unavailable (${_unavailable.get(candidate.name)}).`);
+        continue;
+      }
       if (isOnCooldown(candidate.name)) {
         console.warn(`[Router] Skipping ${candidate.name} — on cooldown.`);
         continue;
@@ -298,7 +328,11 @@ class AIRouter {
       } catch (err) {
         const latency = 0;
         recordPerf(candidate.name, false, latency);
-        recordFailure(candidate.name);
+        const failureKind = classifyProviderFailure(err);
+        if (failureKind === 'permanent') {
+          _unavailable.set(candidate.name, failureKind);
+          console.warn(`[Router] ${candidate.name} marked unavailable (${failureKind}).`);
+        } else recordFailure(candidate.name);
         lastError.e = err;
         console.warn(`[Router] ${candidate.name} failed (${SecretRedactor.redactString(String(err))}), trying next...`);
       }
@@ -320,10 +354,14 @@ class AIRouter {
 
     const ranked = candidates
       .map((c) => ({ ...c, score: scoreProvider({ ...c, provider: null as unknown as ProviderMeta['provider'] }, intent, ctx) }))
-      .filter((c) => c.score >= 0)
-      .sort((a, b) => b.score - a.score);
+      .filter((c) => c.score >= 0);
 
+    let lastError: unknown = null;
     for (const candidate of ranked) {
+      if (_unavailable.has(candidate.name)) {
+        console.warn(`[Router] Skipping ${candidate.name} — unavailable (${_unavailable.get(candidate.name)}).`);
+        continue;
+      }
       if (isOnCooldown(candidate.name)) {
         console.warn(`[Router] Skipping ${candidate.name} — on cooldown.`);
         continue;
@@ -337,13 +375,15 @@ class AIRouter {
         return;
       } catch (err) {
         recordPerf(candidate.name, false, 0);
-        recordFailure(candidate.name);
+        const failureKind = classifyProviderFailure(err);
+        if (failureKind === 'permanent') _unavailable.set(candidate.name, failureKind);
+        else recordFailure(candidate.name);
+        lastError = err;
         console.warn(`[Router] ${candidate.name} stream failed, trying next...`);
-        onChunk({ content: '', done: true }); // signal to reset
       }
     }
 
-    throw new Error('[Router] All streaming providers failed.');
+    throw lastError ?? new Error('[Router] All streaming providers failed.');
   }
 
   /**

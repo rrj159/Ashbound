@@ -1,32 +1,20 @@
-/**
- * /ask — Quick question answering. Cost-sensitive (cheap provider preferred).
- */
-
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
-import { router } from '../../ai/service.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { isRateLimited } from '../../ai/rateLimit.js';
+import { conversationKey, converse } from '../../ai/conversation.js';
+import { splitDiscordMessage } from '../handlers/message.js';
 
-const SYSTEM = `You are Ashbound, a wise sage of the Ashen Realms.
-Answer questions clearly and concisely. Prefer brevity — 2-4 sentences unless detail is asked.`;
-
-export const data = new SlashCommandBuilder()
-  .setName('ask')
-  .setDescription('Quick AI-powered question')
-  .addStringOption((opt) => opt.setName('question').setDescription('Your question').setRequired(true).setMaxLength(2000));
-
+export const data = new SlashCommandBuilder().setName('ask').setDescription('Ask Ashbound anything')
+  .addStringOption((opt) => opt.setName('question').setDescription('What would you like to ask?').setRequired(true).setMaxLength(4000));
 export async function execute(interaction: import('discord.js').ChatInputCommandInteraction): Promise<void> {
-  if (isRateLimited(interaction.user.id)) {
-    await interaction.reply({ content: '⏸️ You are sending requests too fast. Please slow down.', ephemeral: true });
-    return;
-  }
-
-  const question = interaction.options.getString('question', true);
+  if (isRateLimited(interaction.user.id)) { await interaction.reply({ content: '⏸️ You are sending requests too fast. Please slow down.', ephemeral: true }); return; }
   await interaction.deferReply();
   try {
-    const answer = await router.say(question, SYSTEM, { costSensitive: true, intent: 'simple' });
-    const embed = new EmbedBuilder().setColor(0x6a1b9a).setAuthor({ name: 'Ashbound' }).setDescription(answer);
-    await interaction.editReply({ embeds: [embed] });
-  } catch {
-    await interaction.editReply({ content: '❌ The ancient voice falls silent. Try again.' });
+    const answer = await converse({ key: conversationKey({ userId: interaction.user.id, guildId: interaction.guildId, channelId: interaction.channelId }), prompt: interaction.options.getString('question', true) });
+    const [first, ...rest] = splitDiscordMessage(answer);
+    await interaction.editReply({ content: first });
+    for (const chunk of rest) await interaction.followUp({ content: chunk });
+  } catch (err) {
+    console.error('[Ask] AI error:', err instanceof Error ? err.message : err);
+    await interaction.editReply("❌ I couldn't reach any available AI provider right now. Please try again shortly.");
   }
 }

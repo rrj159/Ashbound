@@ -51,6 +51,11 @@ function isConfigured(name: ProviderName): boolean {
   return entry.envVars.every((v) => !!process.env[v]);
 }
 
+function normalizeProviderName(value: string | undefined): ProviderName | null {
+  const normalized = value?.trim().toLowerCase();
+  return normalized && normalized in PROVIDERS ? normalized as ProviderName : null;
+}
+
 function tryInstantiate(name: ProviderName): AIProvider | null {
   if (!isConfigured(name)) return null;
   if (_instances[name]) return _instances[name]!;
@@ -69,9 +74,11 @@ function tryInstantiate(name: ProviderName): AIProvider | null {
 }
 
 export function initProviders(): void {
-  let primaryName   = (process.env.AI_PROVIDER || 'openai')  as ProviderName;
-  const fallbackRaw   = process.env.AI_FALLBACK || 'none';
-  const fallbackName  = fallbackRaw as ProviderName;
+  _primary = null;
+  _fallback = null;
+  // Empty environment variables are equivalent to unset, never provider names.
+  let primaryName = normalizeProviderName(process.env.AI_PROVIDER) ?? 'openai';
+  const fallbackName = normalizeProviderName(process.env.AI_FALLBACK);
 
   if (!isConfigured(primaryName)) {
     console.warn(`[AI] Provider "${primaryName}" not configured (missing env vars). Searching for available providers...`);
@@ -93,7 +100,7 @@ export function initProviders(): void {
     console.warn(`[AI] Could not initialize primary provider "${primaryName}".`);
   }
 
-  if (fallbackRaw !== 'none' && fallbackName !== primaryName) {
+  if (fallbackName && fallbackName !== primaryName) {
     if (isConfigured(fallbackName)) {
       _fallback = tryInstantiate(fallbackName);
       if (_fallback) console.log(`[AI] Fallback provider: ${_fallback.name}`);
@@ -116,6 +123,12 @@ export function getFallbackProvider(): AIProvider | null {
 
 export function listAvailableProviders(): ProviderName[] {
   return (Object.keys(PROVIDERS) as ProviderName[]).filter(isConfigured);
+}
+
+/** Return a lazily-created configured provider for router failover. */
+export function getProvider(name: string): AIProvider | null {
+  const normalized = normalizeProviderName(name);
+  return normalized ? tryInstantiate(normalized) : null;
 }
 
 export function listAllProviders(): ProviderName[] {
