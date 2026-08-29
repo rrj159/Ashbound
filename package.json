@@ -4,11 +4,11 @@
   "description": "AshenAI — Discord AI bot with Ashen Realms RPG",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc --noEmit false --outDir dist",
-    "typecheck": "tsc --noEmit",
+    "build": "node node_modules/typescript/bin/tsc --noEmit false --outDir dist",
+    "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
-    "test": "jest --passWithNoTests"
+    "dev": "node node_modules/ts-node/dist/bin.js src/index.ts",
+    "test": "node node_modules/jest/bin/jest.js --passWithNoTests"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
