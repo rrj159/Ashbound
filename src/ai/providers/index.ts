@@ -46,7 +46,9 @@ let _primary:   AIProvider | null = null;
 let _fallback:  AIProvider | null = null;
 
 function isConfigured(name: ProviderName): boolean {
-  return PROVIDERS[name].envVars.every((v) => !!process.env[v]);
+  const entry = PROVIDERS[name];
+  if (!entry) return false;
+  return entry.envVars.every((v) => !!process.env[v]);
 }
 
 function tryInstantiate(name: ProviderName): AIProvider | null {
@@ -67,8 +69,8 @@ function tryInstantiate(name: ProviderName): AIProvider | null {
 }
 
 export function initProviders(): void {
-  let primaryName   = (process.env.AI_PROVIDER  ?? 'openai')  as ProviderName;
-  const fallbackRaw   = process.env.AI_FALLBACK ?? 'none';
+  let primaryName   = (process.env.AI_PROVIDER || 'openai')  as ProviderName;
+  const fallbackRaw   = process.env.AI_FALLBACK || 'none';
   const fallbackName  = fallbackRaw as ProviderName;
 
   if (!isConfigured(primaryName)) {
@@ -118,4 +120,13 @@ export function listAvailableProviders(): ProviderName[] {
 
 export function listAllProviders(): ProviderName[] {
   return Object.keys(PROVIDERS) as ProviderName[];
+}
+
+/** Reset internal state for testing. */
+export function _resetProviderState(): void {
+  for (const key of Object.keys(_instances) as ProviderName[]) {
+    delete _instances[key];
+  }
+  _primary = null;
+  _fallback = null;
 }

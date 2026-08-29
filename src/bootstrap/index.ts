@@ -10,8 +10,6 @@ import { startWebServer } from '../web/server.js';
 import { registerCommands } from '../discord/register.js';
 import { setupEventHandlers } from '../discord/events.js';
 import { setupMessageHandler } from '../discord/handlers/message.js';
-import { GAME_CONFIG } from '../games/config.js';
-import { combatStore } from '../games/store.js';
 import { restoreAllReminders } from '../discord/commands/remind.js';
 
 export interface Application {
@@ -23,18 +21,20 @@ export interface Application {
  * Bootstrap the entire application.
  */
 export async function bootstrap(): Promise<Application> {
-  console.log(`[AshenAI] Starting — Season ${GAME_CONFIG.season.current}: ${GAME_CONFIG.season.name}`);
+  console.log('[Ashbound] Starting — Season 1: Rise of Ash');
 
   // 1. Load configuration (fails fast on missing required vars)
   const config = initConfig();
-  console.log(`[Config] Loaded. Primary AI: ${config.ai.primaryProvider}`);
+  console.log('[Config] Configuration loaded.');
+  console.log(`[Config] Discord token: ${config.discord.token ? 'configured' : '⚠️ MISSING'}`);
+  console.log(`[Config] Discord client ID: ${config.discord.clientId ? 'configured' : '⚠️ MISSING'}`);
+  console.log(`[Config] Primary AI: ${config.ai.primaryProvider}`);
 
   // 2. Initialize Discord client
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.GuildVoiceStates,
       GatewayIntentBits.MessageContent,
     ],
     partials: [Partials.Message, Partials.Channel],
@@ -46,21 +46,16 @@ export async function bootstrap(): Promise<Application> {
   // 4. Register slash commands
   await registerCommands();
 
-  // 5. Start web server
+  // 5. Start web server (optional — health endpoint)
   await startWebServer();
 
   // 6. Initialize AI providers
   initProviders();
 
-  // 7. Setup message handler
+  // 7. Setup message handler (AI chat on mention/DM)
   setupMessageHandler(client);
 
-  // 8. Purge expired combat sessions every 2 minutes
-  setInterval(() => {
-    combatStore.purgeExpired(GAME_CONFIG.combat.sessionTtlSeconds);
-  }, 120_000);
-
-  // 9. Restore persisted reminders
+  // 8. Restore persisted reminders
   try {
     const restored = await restoreAllReminders();
     if (restored > 0) console.log(`[Reminders] Restored ${restored} pending reminders.`);
@@ -68,9 +63,9 @@ export async function bootstrap(): Promise<Application> {
     // Reminder persistence optional
   }
 
-  // 10. Login to Discord
+  // 9. Login to Discord
   await client.login(config.discord.token);
-  console.log('[AshenAI] Discord client logged in.');
+  console.log('[Ashbound] Discord client logged in.');
 
   return { client, config };
 }
@@ -80,14 +75,13 @@ export async function bootstrap(): Promise<Application> {
  */
 export function setupGracefulShutdown(application: Application): void {
   const shutdown = async (signal: string) => {
-    console.log(`[AshenAI] Received ${signal}. Shutting down gracefully...`);
+    console.log(`[Ashbound] Received ${signal}. Shutting down gracefully...`);
 
     try {
-      // Destroy Discord client
       application.client.destroy();
-      console.log('[AshenAI] Discord client destroyed.');
+      console.log('[Ashbound] Discord client destroyed.');
     } catch (err) {
-      console.error('[AshenAI] Error during shutdown:', err);
+      console.error('[Ashbound] Error during shutdown:', err);
     }
 
     process.exit(0);

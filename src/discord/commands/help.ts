@@ -16,9 +16,8 @@ export async function execute(interaction: import('discord.js').ChatInputCommand
   for (const cmd of commands) {
     const name = cmd.data.name;
     const desc = (cmd.data as { description?: string }).description ?? '';
-    const category = ['profile', 'status', 'hunt', 'adventure', 'inventory', 'gear', 'pets', 'quests', 'title'].includes(name) ? '🎮 Ashen Realms' :
-                     ['chat', 'ask', 'lore', 'narrate', 'translate', 'summarize', 'roll', 'session', 'clear', 'reset', 'describe', 'understand'].includes(name) ? '🧠 AI' :
-                     ['ping', 'serverinfo', 'userinfo', 'avatar', 'help'].includes(name) ? '🛠️ Utilities' : 'Other';
+    const category = ['chat', 'ask', 'lore', 'narrate', 'translate', 'summarize', 'understand', 'describe', 'roll', 'session', 'clear', 'reset', 'model'].includes(name) ? '🧠 AI' :
+                     ['ping', 'serverinfo', 'userinfo', 'channelinfo', 'roleinfo', 'avatar', 'help', 'remind', 'ids', 'status'].includes(name) ? '🛠️ Utilities' : 'Other';
     if (!categorized[category]) categorized[category] = [];
     categorized[category].push(`\`/${name}\` — ${desc}`);
   }

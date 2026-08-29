@@ -27,19 +27,11 @@ export interface SecurityConfig {
   maxFileSize: number;
 }
 
-export interface MemoryConfig {
-  maxMessages: number;
-  maxTokens: number;
-  retentionMs: number;
-  isolateByChannel: boolean;
-}
-
 export interface AppConfig {
   discord: DiscordConfig;
   ai: AIConfig;
   web: WebConfig;
   security: SecurityConfig;
-  memory: MemoryConfig;
   logLevel: string;
   isDevelopment: boolean;
 }
@@ -53,7 +45,7 @@ function requireEnv(name: string): string {
 }
 
 function optionalEnv(name: string, defaultValue: string): string {
-  return process.env[name] ?? defaultValue;
+  return process.env[name] || defaultValue;
 }
 
 function optionalEnvInt(name: string, defaultValue: number): number {
@@ -73,10 +65,10 @@ export function loadConfig(): AppConfig {
   const discordClientId = requireEnv('DISCORD_CLIENT_ID');
 
   // Optional Discord
-  const guildId = process.env.DISCORD_GUILD_ID ?? null;
+  const guildId = process.env.DISCORD_GUILD_ID || null;
 
   // AI
-  const primaryProvider = optionalEnv('AI_PROVIDER', 'openai');
+  const primaryProvider = process.env.AI_PROVIDER || 'openai';
   const fallbackProvider = process.env.AI_FALLBACK && process.env.AI_FALLBACK !== 'none'
     ? process.env.AI_FALLBACK
     : null;
@@ -111,15 +103,9 @@ export function loadConfig(): AppConfig {
   const maxMessageLength = optionalEnvInt('MAX_MESSAGE_LENGTH', 4000);
   const maxFileSize = optionalEnvInt('MAX_FILE_SIZE', 10 * 1024 * 1024);
 
-  // Memory
-  const maxMessages = optionalEnvInt('MEMORY_MAX_MESSAGES', 12);
-  const maxTokens = optionalEnvInt('MEMORY_MAX_TOKENS', 4000);
-  const retentionMs = optionalEnvInt('MEMORY_RETENTION_MS', 30 * 60 * 1000);
-  const isolateByChannel = optionalEnv('MEMORY_ISOLATE_BY_CHANNEL', 'true') === 'true';
-
   // Logging
-  const logLevel = optionalEnv('LOG_LEVEL', 'info');
-  const isDevelopment = optionalEnv('NODE_ENV', 'development') === 'development';
+  const logLevel = process.env.LOG_LEVEL || 'info';
+  const isDevelopment = (process.env.NODE_ENV || 'development') === 'development';
 
   return {
     discord: {
@@ -138,12 +124,6 @@ export function loadConfig(): AppConfig {
       rateLimitWindowMs,
       maxMessageLength,
       maxFileSize,
-    },
-    memory: {
-      maxMessages,
-      maxTokens,
-      retentionMs,
-      isolateByChannel,
     },
     logLevel,
     isDevelopment,

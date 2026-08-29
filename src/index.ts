@@ -1,6 +1,6 @@
 /**
- * AshenAI — Entry point
- * Bootstraps Discord client, web server, and game systems.
+ * Ashbound — Entry point
+ * Bootstraps Discord client, AI providers, and web server.
  */
 
 import 'dotenv/config';
@@ -12,6 +12,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error('[AshenAI] Fatal startup error:', err);
+  console.error('[Ashbound] Fatal startup error:', err);
   process.exit(1);
 });

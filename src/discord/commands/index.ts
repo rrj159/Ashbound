@@ -10,17 +10,6 @@ export interface AshenCommand {
   handleSelect?: (interaction: StringSelectMenuInteraction)   => Promise<boolean>;
 }
 
-// Game commands
-import { profileCommand }   from './profile.js';
-import * as statusCmd      from './status.js';
-import { huntCommand }      from './hunt.js';
-import { adventureCommand } from './adventure.js';
-import { inventoryCommand } from './inventory.js';
-import { gearCommand }      from './gear.js';
-import { petsCommand }      from './pets.js';
-import { questsCommand }    from './quests.js';
-import { titleCommand }     from './title.js';
-
 // AI commands
 import * as chatCmd        from './chat.js';
 import * as describeCmd    from './describe.js';
@@ -42,23 +31,13 @@ import * as helpCmd        from './help.js';
 import * as remindCmd      from './remind.js';
 import * as idsCmd         from './ids.js';
 import * as avatarCmd      from './avatar.js';
+import * as statusCmd      from './status.js';
 import * as serverinfoCmd  from './serverinfo.js';
 import * as userinfoCmd    from './userinfo.js';
 import * as channelinfoCmd from './channelinfo.js';
 import * as roleinfoCmd    from './roleinfo.js';
 
 const COMMANDS: AshenCommand[] = [
-  // Game
-  profileCommand,
-  { data: statusCmd.data, execute: statusCmd.execute },
-  huntCommand,
-  adventureCommand,
-  inventoryCommand,
-  gearCommand,
-  petsCommand,
-  questsCommand,
-  titleCommand,
-
   // AI
   { data: chatCmd.data, execute: chatCmd.execute },
   { data: describeCmd.data, execute: describeCmd.execute },
@@ -80,6 +59,7 @@ const COMMANDS: AshenCommand[] = [
   { data: remindCmd.data, execute: remindCmd.execute },
   { data: idsCmd.data, execute: idsCmd.execute },
   { data: avatarCmd.data, execute: avatarCmd.execute },
+  { data: statusCmd.data, execute: statusCmd.execute },
   { data: serverinfoCmd.data, execute: serverinfoCmd.execute },
   { data: userinfoCmd.data, execute: userinfoCmd.execute },
   { data: channelinfoCmd.data, execute: channelinfoCmd.execute },
