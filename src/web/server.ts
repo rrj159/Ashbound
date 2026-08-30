@@ -5,6 +5,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import { getAllHealth } from '../ai/health.js';
 
 export async function startWebServer(): Promise<void> {
   const app = express();
@@ -20,6 +21,24 @@ export async function startWebServer(): Promise<void> {
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
     });
+  });
+
+  // Provider health — internal diagnostics (no secrets exposed)
+  app.get('/api/providers', (_req, res) => {
+    const health = getAllHealth();
+    // Strip sensitive data — only expose status, latency, and success rates
+    const safe: Record<string, Record<string, unknown>> = {};
+    for (const [name, h] of Object.entries(health)) {
+      safe[name] = {
+        status: h.status,
+        successRate: h.successRate,
+        avgLatencyMs: h.avgLatencyMs,
+        totalSuccesses: h.totalSuccesses,
+        totalFailures: h.totalFailures,
+        cooldownRemainingMs: h.cooldownRemainingMs,
+      };
+    }
+    res.json({ providers: safe });
   });
 
   // Fallback

@@ -56,3 +56,53 @@ export interface AIProvider {
     onDone?: (meta: Record<string, unknown>) => void,
   ): Promise<void>;
 }
+
+// ─── Provider capability metadata ───────────────────────────────────────
+
+export type ProviderFailureKind =
+  | 'permanent'
+  | 'rate_limit'
+  | 'transient'
+  | 'model_unavailable'
+  | 'network_error'
+  | 'invalid_credentials'
+  | 'no_credits';
+
+/** Provider state as tracked by the router. */
+export type ProviderState =
+  | 'HEALTHY'
+  | 'COOLDOWN'
+  | 'RATE_LIMITED'
+  | 'UNAVAILABLE'
+  | 'INVALID_CREDENTIALS'
+  | 'NO_CREDITS'
+  | 'MODEL_UNAVAILABLE'
+  | 'NETWORK_ERROR';
+
+/** Static capability metadata for a provider model. */
+export interface ModelEntry {
+  provider: string;
+  modelId: string;
+  displayName: string;
+  contextLength: number;
+  supportsStreaming: boolean;
+  supportsTools: boolean;
+  supportsVision: boolean;
+  supportsDocuments: boolean;
+  /** Estimated cost per 1K tokens (0 = free). */
+  costPer1k: number;
+  /** Whether this model is known to be on a free tier. */
+  freeTier: boolean;
+  /** Priority: lower = preferred. */
+  priority: number;
+}
+
+/** Dynamic availability state for a model. */
+export interface ModelAvailability {
+  available: boolean;
+  lastSuccessAt: number | null;
+  lastFailureAt: number | null;
+  lastError: string | null;
+  cooldownUntil: number | null;
+  consecutiveFailures: number;
+}

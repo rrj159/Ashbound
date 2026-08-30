@@ -88,6 +88,17 @@ export function loadConfig(): AppConfig {
     openrouter: { apiKey: 'OPENROUTER_API_KEY', model: 'OPENROUTER_MODEL' },
     xai: { apiKey: 'XAI_API_KEY', model: 'XAI_MODEL' },
     cohere: { apiKey: 'COHERE_API_KEY', model: 'COHERE_MODEL' },
+    freellmapi: { apiKey: 'FREELLMAPI_API_KEY', model: 'FREELLMAPI_MODEL' },
+    cerebras: { apiKey: 'CEREBRAS_API_KEY', model: 'CEREBRAS_MODEL' },
+    nvidia: { apiKey: 'NVIDIA_API_KEY', model: 'NVIDIA_MODEL' },
+    github: { apiKey: 'GITHUB_TOKEN', model: 'GITHUB_MODEL' },
+    cloudflare: { apiKey: 'CLOUDFLARE_API_TOKEN', model: 'CLOUDFLARE_MODEL' },
+    huggingface: { apiKey: 'HF_TOKEN', model: 'HF_MODEL' },
+    pollinations: { apiKey: '', model: 'POLLINATIONS_MODEL' },
+    opencodezen: { apiKey: 'OPENCODEZEN_API_KEY', model: 'OPENCODEZEN_MODEL' },
+    zhipu: { apiKey: 'ZHIPU_API_KEY', model: 'ZHIPU_MODEL' },
+    ollama: { apiKey: '', model: 'OLLAMA_MODEL' },
+    custom: { apiKey: 'CUSTOM_API_KEY', model: 'CUSTOM_MODEL' },
   };
 
   for (const [name, envVars] of Object.entries(providerEnvVars)) {

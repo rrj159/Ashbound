@@ -15,7 +15,7 @@ export class GeminiProvider implements AIProvider {
   }
 
   async complete(opts: AICompletionOptions): Promise<AIResponse> {
-    const modelName = opts.model ?? process.env.GEMINI_MODEL ?? 'gemini-1.5-flash';
+    const modelName = opts.model ?? process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
     const model = this.client.getGenerativeModel({ model: modelName });
 
     const history = opts.messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
@@ -35,7 +35,7 @@ export class GeminiProvider implements AIProvider {
     onChunk: (chunk: AIStreamChunk) => void,
     onDone?: (meta: Record<string, unknown>) => void,
   ): Promise<void> {
-    const modelName = opts.model ?? process.env.GEMINI_MODEL ?? 'gemini-1.5-flash';
+    const modelName = opts.model ?? process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
     const model = this.client.getGenerativeModel({ model: modelName });
     const result = await model.generateContentStream({ contents: [{ role: 'user', parts: [{ text: opts.messages.at(-1)?.content ?? '' }] }] });
 

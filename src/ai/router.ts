@@ -2,18 +2,23 @@
  * Smart AI Router — intelligent request routing across providers.
  *
  * Routes based on:
- * - Capability (vision, streaming, system prompt length)
+ * - Provider health and state (HEALTHY, COOLDOWN, RATE_LIMITED, etc.)
+ * - Capability (vision, streaming, tools, system prompt length)
  * - Cost (cheap for simple tasks, premium for complex)
  * - Latency (round-trip pings)
- * - Explicit hints (per-command preferences)
- * - Fallback chains
+ * - Model availability
+ * - Automatic fallback with exponential backoff
+ * - Permanent failure detection (invalid creds, no credits)
+ * - Temporary failure recovery
+ * - Usage tracking
  *
  * Usage: replace `ai.chat()` with `router.chat()` — same interface.
  */
 
 import { getPrimaryProvider, getFallbackProvider, getProvider, listAvailableProviders } from './providers/index.js';
-import type { AICompletionOptions, AIResponse, AIStreamChunk, AIMessage } from './types.js';
+import type { AICompletionOptions, AIResponse, AIStreamChunk, AIMessage, ProviderFailureKind as ProviderFailureKindType, ProviderState } from './types.js';
 import { SecretRedactor } from '../security/SecretRedactor.js';
+import { MODEL_CATALOG, lookupModel } from './modelCatalog.js';
 
 /** Per-provider cooldown state. */
 interface CooldownEntry {
@@ -25,7 +30,7 @@ const _cooldowns = new Map<string, CooldownEntry>();
 /** Providers with rejected credentials or exhausted credit. */
 const _unavailable = new Map<string, string>();
 
-type ProviderFailureKind = 'permanent' | 'rate_limit' | 'transient';
+type ProviderFailureKind = ProviderFailureKindType;
 
 function classifyProviderFailure(error: unknown): ProviderFailureKind {
   const record = error && typeof error === 'object' ? error as Record<string, unknown> : {};
@@ -36,9 +41,25 @@ function classifyProviderFailure(error: unknown): ProviderFailureKind {
     typeof record.type === 'string' ? record.type : '',
     record.error && typeof record.error === 'object' ? JSON.stringify(record.error) : '',
   ].join(' ').toLowerCase();
-  if (/(credit_balance_exhausted|insufficient_quota|invalid.?api.?key|invalid.?key|authentication|unauthori[sz]ed|forbidden|billing)/.test(details)
-    || status === 401 || status === 403) return 'permanent';
+
+  // Authentication / authorization failures — never retry
+  if (/(invalid.?api.?key|invalid.?key|authentication|unauthori[sz]ed|forbidden|billing|identity-linked|workspace.?id)/.test(details)
+    || status === 401 || status === 403) return 'invalid_credentials';
+
+  // Quota / credit exhaustion — do not retry until manually refreshed
+  if (/(credit_balance_exhausted|insufficient_quota|insufficient.?balance|insufficient.?credits|payment.?required|no.?credits)/.test(details)
+    || status === 402) return 'no_credits';
+
+  // Model-specific failures — may resolve if model is changed
+  if (/(model.?not.?found|not.?found|does.?not.?exist|unavailable|deprecated|not.?available)/.test(details)
+    || status === 404) return 'model_unavailable';
+
+  // Rate limiting — will recover
   if (status === 429 || /rate.?limit|too many requests/.test(details)) return 'rate_limit';
+
+  // Network errors — transient
+  if (/(ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|network|socket hang up|fetch failed|timeout|aborted)/.test(details)) return 'network_error';
+
   return 'transient';
 }
 
@@ -172,15 +193,25 @@ interface ProviderMeta {
 }
 
 const PROVIDER_CATALOG: Record<string, Omit<ProviderMeta, 'provider'>> = {
-  openai:     { name: 'openai',     costPerM: 2.0,   latencyMs: 0, supportsVision: true,  supportsSystemLong: true,  supportsStreaming: true,  model: process.env.OPENAI_MODEL     ?? 'gpt-4o-mini' },
-  anthropic:  { name: 'anthropic',  costPerM: 3.0,   latencyMs: 0, supportsVision: true,  supportsSystemLong: true,  supportsStreaming: true,  model: process.env.ANTHROPIC_MODEL  ?? 'claude-3-5-sonnet-20241022' },
-  gemini:     { name: 'gemini',     costPerM: 0.5,   latencyMs: 0, supportsVision: true,  supportsSystemLong: true,  supportsStreaming: true,  model: process.env.GEMINI_MODEL     ?? 'gemini-1.5-flash' },
-  groq:       { name: 'groq',       costPerM: 0.07,  latencyMs: 0, supportsVision: false, supportsSystemLong: false, supportsStreaming: true,  model: process.env.GROQ_MODEL       ?? 'llama-3.3-70b-versatile' },
-  openrouter: { name: 'openrouter', costPerM: 0.5,   latencyMs: 0, supportsVision: false, supportsSystemLong: true,  supportsStreaming: true,  model: process.env.OPENROUTER_MODEL ?? 'openai/gpt-4o-mini' },
-  mistral:    { name: 'mistral',   costPerM: 2.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: true,  supportsStreaming: true,  model: process.env.MISTRAL_MODEL    ?? 'mistral-large-latest' },
-  deepseek:   { name: 'deepseek',   costPerM: 0.14,  latencyMs: 0, supportsVision: false, supportsSystemLong: true,  supportsStreaming: true,  model: process.env.DEEPSEEK_MODEL   ?? 'deepseek-chat' },
-  xai:        { name: 'xai',        costPerM: 5.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: true,  supportsStreaming: true,  model: process.env.XAI_MODEL        ?? 'grok-beta' },
-  cohere:     { name: 'cohere',     costPerM: 3.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: false, supportsStreaming: true,  model: process.env.COHERE_MODEL     ?? 'command-r-plus' },
+  openai:      { name: 'openai',      costPerM: 2.0,   latencyMs: 0, supportsVision: true,  supportsSystemLong: true,  supportsStreaming: true,  model: process.env.OPENAI_MODEL      ?? 'gpt-4o-mini' },
+  anthropic:   { name: 'anthropic',   costPerM: 3.0,   latencyMs: 0, supportsVision: true,  supportsSystemLong: true,  supportsStreaming: true,  model: process.env.ANTHROPIC_MODEL   ?? 'claude-sonnet-4-20250514' },
+  gemini:      { name: 'gemini',      costPerM: 0.5,   latencyMs: 0, supportsVision: true,  supportsSystemLong: true,  supportsStreaming: true,  model: process.env.GEMINI_MODEL      ?? 'gemini-2.0-flash' },
+  groq:        { name: 'groq',        costPerM: 0.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: false, supportsStreaming: true,  model: process.env.GROQ_MODEL        ?? 'llama-3.1-8b-instant' },
+  openrouter:  { name: 'openrouter',  costPerM: 0.5,   latencyMs: 0, supportsVision: false, supportsSystemLong: true,  supportsStreaming: true,  model: process.env.OPENROUTER_MODEL  ?? 'meta-llama/llama-3.1-8b-instruct:free' },
+  mistral:     { name: 'mistral',     costPerM: 2.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: true,  supportsStreaming: true,  model: process.env.MISTRAL_MODEL     ?? 'mistral-small-latest' },
+  deepseek:    { name: 'deepseek',    costPerM: 0.14,  latencyMs: 0, supportsVision: false, supportsSystemLong: true,  supportsStreaming: true,  model: process.env.DEEPSEEK_MODEL    ?? 'deepseek-chat' },
+  xai:         { name: 'xai',         costPerM: 5.0,   latencyMs: 0, supportsVision: true,  supportsSystemLong: true,  supportsStreaming: true,  model: process.env.XAI_MODEL         ?? 'grok-3-mini' },
+  cohere:      { name: 'cohere',      costPerM: 3.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: true,  supportsStreaming: true,  model: process.env.COHERE_MODEL      ?? 'command-a-03-2025' },
+  cerebras:    { name: 'cerebras',    costPerM: 0.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: false, supportsStreaming: true,  model: process.env.CEREBRAS_MODEL    ?? 'llama-3.3-70b' },
+  nvidia:      { name: 'nvidia',      costPerM: 0.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: true,  supportsStreaming: true,  model: process.env.NVIDIA_MODEL      ?? 'nvidia/llama-3.1-nemotron-70b-instruct' },
+  github:      { name: 'github',      costPerM: 0.0,   latencyMs: 0, supportsVision: true,  supportsSystemLong: true,  supportsStreaming: true,  model: process.env.GITHUB_MODEL      ?? 'gpt-4o-mini' },
+  cloudflare:  { name: 'cloudflare',  costPerM: 0.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: false, supportsStreaming: true,  model: process.env.CLOUDFLARE_MODEL  ?? '@cf/meta/llama-3.1-8b-instruct' },
+  huggingface: { name: 'huggingface', costPerM: 0.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: false, supportsStreaming: true,  model: process.env.HF_MODEL          ?? 'meta-llama/Llama-3.1-8B-Instruct' },
+  pollinations:{ name: 'pollinations', costPerM: 0.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: false, supportsStreaming: true,  model: process.env.POLLINATIONS_MODEL ?? 'openai' },
+  freellmapi:  { name: 'freellmapi',  costPerM: 0.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: true,  supportsStreaming: true,  model: process.env.FREELLMAPI_MODEL  ?? 'auto' },
+  opencodezen: { name: 'opencodezen', costPerM: 0.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: false, supportsStreaming: true,  model: process.env.OPENCODEZEN_MODEL ?? 'auto' },
+  zhipu:       { name: 'zhipu',       costPerM: 0.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: false, supportsStreaming: true,  model: process.env.ZHIPU_MODEL       ?? 'glm-4-flash' },
+  ollama:      { name: 'ollama',      costPerM: 0.0,   latencyMs: 0, supportsVision: false, supportsSystemLong: false, supportsStreaming: true,  model: process.env.OLLAMA_MODEL      ?? 'llama3.1' },
 };
 
 /** Known good intent → provider preferences (ordered). */
@@ -329,12 +360,19 @@ class AIRouter {
         const latency = 0;
         recordPerf(candidate.name, false, latency);
         const failureKind = classifyProviderFailure(err);
-        if (failureKind === 'permanent') {
+        // Permanent failures: invalid_credentials, no_credits — do not retry
+        if (failureKind === 'invalid_credentials' || failureKind === 'no_credits') {
           _unavailable.set(candidate.name, failureKind);
           console.warn(`[Router] ${candidate.name} marked unavailable (${failureKind}).`);
-        } else recordFailure(candidate.name);
+        } else if (failureKind === 'model_unavailable') {
+          // Model not found — mark as model_unavailable, may recover with different model
+          _unavailable.set(candidate.name, failureKind);
+          console.warn(`[Router] ${candidate.name} model unavailable (${failureKind}).`);
+        } else {
+          recordFailure(candidate.name);
+        }
         lastError.e = err;
-        console.warn(`[Router] ${candidate.name} failed (${SecretRedactor.redactString(String(err))}), trying next...`);
+        console.warn(`[Router] ${candidate.name} failed [${failureKind}] (${SecretRedactor.redactString(String(err))}), trying next...`);
       }
     }
 
@@ -376,10 +414,15 @@ class AIRouter {
       } catch (err) {
         recordPerf(candidate.name, false, 0);
         const failureKind = classifyProviderFailure(err);
-        if (failureKind === 'permanent') _unavailable.set(candidate.name, failureKind);
-        else recordFailure(candidate.name);
+        if (failureKind === 'invalid_credentials' || failureKind === 'no_credits') {
+          _unavailable.set(candidate.name, failureKind);
+        } else if (failureKind === 'model_unavailable') {
+          _unavailable.set(candidate.name, failureKind);
+        } else {
+          recordFailure(candidate.name);
+        }
         lastError = err;
-        console.warn(`[Router] ${candidate.name} stream failed, trying next...`);
+        console.warn(`[Router] ${candidate.name} stream failed [${failureKind}], trying next...`);
       }
     }
 

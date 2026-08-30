@@ -116,6 +116,10 @@ beforeEach(() => {
   delete process.env.OPENROUTER_API_KEY;
   delete process.env.XAI_API_KEY;
   delete process.env.COHERE_API_KEY;
+  delete process.env.FREELLMAPI_ENABLED;
+  delete process.env.FREELLMAPI_BASE_URL;
+  delete process.env.FREELLMAPI_API_KEY;
+  delete process.env.FREELLMAPI_MODEL;
   delete process.env.OPENAI_MODEL;
   delete process.env.ANTHROPIC_MODEL;
   delete process.env.GEMINI_MODEL;
@@ -125,6 +129,16 @@ beforeEach(() => {
   delete process.env.OPENROUTER_MODEL;
   delete process.env.XAI_MODEL;
   delete process.env.COHERE_MODEL;
+  delete process.env.OPENCODEZEN_API_KEY;
+  delete process.env.OPENCODEZEN_MODEL;
+  delete process.env.ZHIPU_API_KEY;
+  delete process.env.ZHIPU_MODEL;
+  delete process.env.OLLAMA_BASE_URL;
+  delete process.env.OLLAMA_MODEL;
+  delete process.env.CUSTOM_BASE_URL;
+  delete process.env.CUSTOM_API_KEY;
+  delete process.env.CUSTOM_MODEL;
+  delete process.env.CUSTOM_PROVIDER_NAME;
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -252,7 +266,7 @@ describe('OpenAIProvider', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('AnthropicProvider', () => {
-  const model = 'claude-3-5-sonnet-20241022';
+  const model = 'claude-sonnet-4-20250514';
 
   it('constructor accepts optional apiKey', async () => {
     const Anthropic = (await import('@anthropic-ai/sdk')).default;
@@ -402,7 +416,7 @@ describe('AnthropicProvider', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('GeminiProvider', () => {
-  const model = 'gemini-1.5-flash';
+  const model = 'gemini-2.0-flash';
 
   it('constructor accepts optional apiKey', async () => {
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
@@ -556,7 +570,7 @@ const openAICompatProviders: OpenAICompatConfig[] = [
   {
     importPath: '../providers/groq.js',
     className: 'GroqProvider',
-    defaultModel: 'llama-3.3-70b-versatile',
+    defaultModel: 'llama-3.1-8b-instant',
     envKey: 'GROQ_API_KEY',
     envModel: 'GROQ_MODEL',
     baseURL: 'https://api.groq.com/openai/v1',
@@ -564,7 +578,7 @@ const openAICompatProviders: OpenAICompatConfig[] = [
   {
     importPath: '../providers/mistral.js',
     className: 'MistralProvider',
-    defaultModel: 'mistral-large-latest',
+    defaultModel: 'mistral-small-latest',
     envKey: 'MISTRAL_API_KEY',
     envModel: 'MISTRAL_MODEL',
     baseURL: 'https://api.mistral.ai/v1',
@@ -580,7 +594,7 @@ const openAICompatProviders: OpenAICompatConfig[] = [
   {
     importPath: '../providers/openrouter.js',
     className: 'OpenRouterProvider',
-    defaultModel: 'openai/gpt-4o-mini',
+    defaultModel: 'meta-llama/llama-3.1-8b-instruct:free',
     envKey: 'OPENROUTER_API_KEY',
     envModel: 'OPENROUTER_MODEL',
     baseURL: 'https://openrouter.ai/api/v1',
@@ -588,7 +602,7 @@ const openAICompatProviders: OpenAICompatConfig[] = [
   {
     importPath: '../providers/xai.js',
     className: 'XAIProvider',
-    defaultModel: 'grok-beta',
+    defaultModel: 'grok-3-mini',
     envKey: 'XAI_API_KEY',
     envModel: 'XAI_MODEL',
     baseURL: 'https://api.x.ai/v1',
@@ -596,7 +610,7 @@ const openAICompatProviders: OpenAICompatConfig[] = [
   {
     importPath: '../providers/cohere.js',
     className: 'CohereProvider',
-    defaultModel: 'command-r-plus',
+    defaultModel: 'command-a-03-2025',
     envKey: 'COHERE_API_KEY',
     envModel: 'COHERE_MODEL',
     baseURL: 'https://api.cohere.com/compatibility/v1',
@@ -712,10 +726,12 @@ describe.each(openAICompatProviders)('$className (OpenAI-compatible)', (cfg) => 
 
     await provider.stream(baseOpts, jest.fn(), onDone);
 
-    expect(onDone).toHaveBeenCalledWith({
-      model: cfg.defaultModel,
-      finishReason: 'stop',
-    });
+    expect(onDone).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: cfg.defaultModel,
+        finishReason: 'stop',
+      }),
+    );
   });
 
   it('stream() propagates API errors', async () => {

@@ -4,22 +4,37 @@
  * Providers are lazily initialized — only when their required env vars are present.
  * The bot works with whatever providers are configured, no empty stubs needed.
  *
- * AI_PROVIDER=openai|anthropic|...
+ * AI_PROVIDER=openai|anthropic|gemini|groq|cerebras|...
  * AI_FALLBACK=openai|anthropic|...|none
  */
 
-import { OpenAIProvider }    from './openai.js';
-import { AnthropicProvider } from './anthropic.js';
-import { GeminiProvider }     from './gemini.js';
-import { GroqProvider }      from './groq.js';
-import { MistralProvider }   from './mistral.js';
-import { DeepSeekProvider }  from './deepseek.js';
-import { OpenRouterProvider } from './openrouter.js';
-import { XAIProvider }       from './xai.js';
-import { CohereProvider }    from './cohere.js';
-import type { AIProvider }   from '../types.js';
+import { OpenAIProvider }      from './openai.js';
+import { AnthropicProvider }   from './anthropic.js';
+import { GeminiProvider }       from './gemini.js';
+import { GroqProvider }        from './groq.js';
+import { MistralProvider }     from './mistral.js';
+import { DeepSeekProvider }    from './deepseek.js';
+import { OpenRouterProvider }  from './openrouter.js';
+import { XAIProvider }         from './xai.js';
+import { CohereProvider }      from './cohere.js';
+import { FreeLLMAPIProvider }  from './freellmapi.js';
+import { CerebrasProvider }    from './cerebras.js';
+import { NvidiaProvider }      from './nvidia.js';
+import { GitHubModelsProvider } from './github.js';
+import { CloudflareProvider }  from './cloudflare.js';
+import { HuggingFaceProvider } from './huggingface.js';
+import { PollinationsProvider } from './pollinations.js';
+import { OpenCodeZenProvider } from './opencodezen.js';
+import { ZhipuProvider }       from './zhipu.js';
+import { OllamaProvider }      from './ollama.js';
+import { CustomEndpointProvider } from './custom.js';
+import type { AIProvider }     from '../types.js';
 
-export type ProviderName = 'openai' | 'anthropic' | 'gemini' | 'groq' | 'mistral' | 'deepseek' | 'openrouter' | 'xai' | 'cohere';
+export type ProviderName =
+  | 'openai' | 'anthropic' | 'gemini' | 'groq' | 'mistral'
+  | 'deepseek' | 'openrouter' | 'xai' | 'cohere' | 'freellmapi'
+  | 'cerebras' | 'nvidia' | 'github' | 'cloudflare' | 'huggingface'
+  | 'pollinations' | 'opencodezen' | 'zhipu' | 'ollama' | 'custom';
 
 interface ProviderEntry {
   factory: (() => AIProvider) | null; // null = env vars not set
@@ -27,15 +42,26 @@ interface ProviderEntry {
 }
 
 const PROVIDERS: Record<ProviderName, ProviderEntry> = {
-  openai:     { factory: () => new OpenAIProvider(),     envVars: ['OPENAI_API_KEY'] },
-  anthropic:  { factory: () => new AnthropicProvider(),  envVars: ['ANTHROPIC_API_KEY'] },
-  gemini:     { factory: () => new GeminiProvider(),     envVars: ['GEMINI_API_KEY'] },
-  groq:       { factory: () => new GroqProvider(),       envVars: ['GROQ_API_KEY'] },
-  mistral:    { factory: () => new MistralProvider(),    envVars: ['MISTRAL_API_KEY'] },
-  deepseek:   { factory: () => new DeepSeekProvider(),   envVars: ['DEEPSEEK_API_KEY'] },
-  openrouter: { factory: () => new OpenRouterProvider(), envVars: ['OPENROUTER_API_KEY'] },
-  xai:        { factory: () => new XAIProvider(),        envVars: ['XAI_API_KEY'] },
-  cohere:     { factory: () => new CohereProvider(),     envVars: ['COHERE_API_KEY'] },
+  openai:      { factory: () => new OpenAIProvider(),      envVars: ['OPENAI_API_KEY'] },
+  anthropic:   { factory: () => new AnthropicProvider(),   envVars: ['ANTHROPIC_API_KEY'] },
+  gemini:      { factory: () => new GeminiProvider(),      envVars: ['GEMINI_API_KEY'] },
+  groq:        { factory: () => new GroqProvider(),        envVars: ['GROQ_API_KEY'] },
+  mistral:     { factory: () => new MistralProvider(),     envVars: ['MISTRAL_API_KEY'] },
+  deepseek:    { factory: () => new DeepSeekProvider(),    envVars: ['DEEPSEEK_API_KEY'] },
+  openrouter:  { factory: () => new OpenRouterProvider(),  envVars: ['OPENROUTER_API_KEY'] },
+  xai:         { factory: () => new XAIProvider(),         envVars: ['XAI_API_KEY'] },
+  cohere:      { factory: () => new CohereProvider(),      envVars: ['COHERE_API_KEY'] },
+  freellmapi:  { factory: () => new FreeLLMAPIProvider(),  envVars: ['FREELLMAPI_BASE_URL'] },
+  cerebras:    { factory: () => new CerebrasProvider(),    envVars: ['CEREBRAS_API_KEY'] },
+  nvidia:      { factory: () => new NvidiaProvider(),      envVars: ['NVIDIA_API_KEY'] },
+  github:      { factory: () => new GitHubModelsProvider(), envVars: ['GITHUB_TOKEN'] },
+  cloudflare:  { factory: () => new CloudflareProvider(),  envVars: ['CLOUDFLARE_API_TOKEN'] },
+  huggingface: { factory: () => new HuggingFaceProvider(), envVars: ['HF_TOKEN'] },
+  pollinations:{ factory: () => new PollinationsProvider(),envVars: [] }, // keyless
+  opencodezen: { factory: () => new OpenCodeZenProvider(), envVars: ['OPENCODEZEN_API_KEY'] },
+  zhipu:       { factory: () => new ZhipuProvider(),       envVars: ['ZHIPU_API_KEY'] },
+  ollama:      { factory: () => new OllamaProvider(),      envVars: [] }, // keyless (local)
+  custom:      { factory: () => new CustomEndpointProvider(), envVars: ['CUSTOM_BASE_URL'] },
 };
 
 /** Lazy instances — initialized once on first use. */

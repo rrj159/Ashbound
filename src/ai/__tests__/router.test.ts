@@ -98,7 +98,7 @@ describe('AIRouter.chat()', () => {
     mockListAvailable.mockReturnValue(['openai', 'groq']);
 
     await expect(router.chat({ messages: userMsg('Hello') })).resolves.toMatchObject({ content: 'Fallback response' });
-    expect(getUnavailableProviders().openai).toBe('permanent');
+    expect(getUnavailableProviders().openai).toBe('no_credits');
     openai.complete.mockClear();
     await router.chat({ messages: userMsg('Again') });
     expect(openai.complete).not.toHaveBeenCalled();

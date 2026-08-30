@@ -40,7 +40,7 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async complete(opts: AICompletionOptions): Promise<AIResponse> {
-    const model = opts.model ?? process.env.ANTHROPIC_MODEL ?? 'claude-3-5-sonnet-20241022';
+    const model = opts.model ?? process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-20250514';
     const { system, messages } = this.buildMessages(opts.messages);
 
     const params: Anthropic.MessageCreateParams = {
@@ -70,7 +70,7 @@ export class AnthropicProvider implements AIProvider {
     onChunk: (chunk: AIStreamChunk) => void,
     onDone?: (meta: Record<string, unknown>) => void,
   ): Promise<void> {
-    const model = opts.model ?? process.env.ANTHROPIC_MODEL ?? 'claude-3-5-sonnet-20241022';
+    const model = opts.model ?? process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-20250514';
     const { system, messages } = this.buildMessages(opts.messages);
 
     const params: Anthropic.MessageCreateParams = {

@@ -19,6 +19,9 @@ beforeEach(async () => {
   delete process.env.OPENROUTER_API_KEY;
   delete process.env.XAI_API_KEY;
   delete process.env.COHERE_API_KEY;
+  delete process.env.FREELLMAPI_ENABLED;
+  delete process.env.FREELLMAPI_BASE_URL;
+  delete process.env.FREELLMAPI_API_KEY;
 });
 
 describe('Provider Registry Safety', () => {
@@ -26,15 +29,17 @@ describe('Provider Registry Safety', () => {
     process.env.AI_PROVIDER = '';
     const { initProviders, getPrimaryProvider, listAvailableProviders } = await import('../providers/index.js');
     expect(() => initProviders()).not.toThrow();
-    expect(getPrimaryProvider()).toBeNull();
-    expect(listAvailableProviders()).toEqual([]);
+    // Pollinations and Ollama are keyless, always available
+    expect(listAvailableProviders()).toContain('pollinations');
+    expect(listAvailableProviders()).toContain('ollama');
   });
 
   it('initProviders() does not crash when AI_PROVIDER is undefined', async () => {
     delete process.env.AI_PROVIDER;
     const { initProviders, getPrimaryProvider } = await import('../providers/index.js');
     expect(() => initProviders()).not.toThrow();
-    expect(getPrimaryProvider()).toBeNull();
+    // Pollinations is keyless, always available as primary
+    expect(getPrimaryProvider()).not.toBeNull();
   });
 
   it('initProviders() does not crash when AI_FALLBACK is empty string', async () => {
@@ -53,7 +58,8 @@ describe('Provider Registry Safety', () => {
     process.env.AI_PROVIDER = 'nonexistent_provider';
     const { initProviders, getPrimaryProvider } = await import('../providers/index.js');
     expect(() => initProviders()).not.toThrow();
-    expect(getPrimaryProvider()).toBeNull();
+    // Pollinations is keyless, auto-selected as fallback
+    expect(getPrimaryProvider()).not.toBeNull();
   });
 
   it('initProviders() selects available provider when primary is unconfigured', async () => {
@@ -64,22 +70,71 @@ describe('Provider Registry Safety', () => {
     expect(listAvailableProviders()).toContain('groq');
   });
 
-  it('initProviders() returns empty list when no API keys set', async () => {
+  it('initProviders() returns keyless providers when no API keys set', async () => {
     const { initProviders, listAvailableProviders } = await import('../providers/index.js');
     initProviders();
-    expect(listAvailableProviders()).toEqual([]);
+    // Pollinations and Ollama are keyless, always available
+    expect(listAvailableProviders()).toContain('pollinations');
+    expect(listAvailableProviders()).toContain('ollama');
   });
 
-  it('getPrimaryProvider() returns null when none configured', async () => {
+  it('getPrimaryProvider() returns keyless provider when none configured', async () => {
     const { initProviders, getPrimaryProvider } = await import('../providers/index.js');
     initProviders();
-    expect(getPrimaryProvider()).toBeNull();
+    // Pollinations is keyless, auto-selected
+    expect(getPrimaryProvider()).not.toBeNull();
+    expect(getPrimaryProvider()!.name).toBe('pollinations');
   });
 
   it('getFallbackProvider() returns null when none configured', async () => {
     const { initProviders, getFallbackProvider } = await import('../providers/index.js');
     initProviders();
     expect(getFallbackProvider()).toBeNull();
+  });
+});
+
+describe('FreeLLMAPI Provider Registry', () => {
+  it('initProviders() recognizes freellmapi when FREELLMAPI_BASE_URL is set', async () => {
+    process.env.FREELLMAPI_BASE_URL = 'https://freellmapi.example.com';
+    const { initProviders, getPrimaryProvider, listAvailableProviders } = await import('../providers/index.js');
+    initProviders();
+    expect(listAvailableProviders()).toContain('freellmapi');
+  });
+
+  it('initProviders() selects freellmapi as primary when AI_PROVIDER=freellmapi', async () => {
+    process.env.AI_PROVIDER = 'freellmapi';
+    process.env.FREELLMAPI_BASE_URL = 'https://freellmapi.example.com';
+    const { initProviders, getPrimaryProvider } = await import('../providers/index.js');
+    initProviders();
+    const primary = getPrimaryProvider();
+    expect(primary).not.toBeNull();
+    expect(primary!.name).toBe('freellmapi');
+  });
+
+  it('initProviders() does not list freellmapi when BASE_URL is missing', async () => {
+    const { initProviders, listAvailableProviders } = await import('../providers/index.js');
+    initProviders();
+    expect(listAvailableProviders()).not.toContain('freellmapi');
+  });
+
+  it('initProviders() does not crash when FREELLMAPI_ENABLED=false', async () => {
+    process.env.FREELLMAPI_BASE_URL = 'https://freellmapi.example.com';
+    process.env.FREELLMAPI_ENABLED = 'false';
+    const { initProviders, getPrimaryProvider, listAvailableProviders } = await import('../providers/index.js');
+    // isConfigured passes (BASE_URL set) but factory throws -> warning, no crash
+    expect(() => initProviders()).not.toThrow();
+    expect(listAvailableProviders()).toContain('freellmapi');
+    // Primary is null because instantiation failed
+    expect(getPrimaryProvider()).toBeNull();
+  });
+
+  it('getProvider() returns freellmapi instance', async () => {
+    process.env.FREELLMAPI_BASE_URL = 'https://freellmapi.example.com';
+    const { initProviders, getProvider } = await import('../providers/index.js');
+    initProviders();
+    const p = getProvider('freellmapi');
+    expect(p).not.toBeNull();
+    expect(p!.name).toBe('freellmapi');
   });
 });
 
@@ -125,5 +180,17 @@ describe('Config Safety', () => {
     const { loadConfig } = await import('../../config/config.js');
     const config = loadConfig();
     expect(config.ai.providers.openai?.apiKey).toBe('sk-test-key');
+  });
+
+  it('loadConfig() includes freellmapi when env vars set', async () => {
+    process.env.DISCORD_TOKEN = 'test-token';
+    process.env.DISCORD_CLIENT_ID = 'test-client';
+    process.env.FREELLMAPI_API_KEY = 'flm-test-key';
+    process.env.FREELLMAPI_MODEL = 'auto';
+    const { loadConfig } = await import('../../config/config.js');
+    const config = loadConfig();
+    expect(config.ai.providers.freellmapi).toBeDefined();
+    expect(config.ai.providers.freellmapi?.apiKey).toBe('flm-test-key');
+    expect(config.ai.providers.freellmapi?.model).toBe('auto');
   });
 });
